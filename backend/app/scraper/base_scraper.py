@@ -1,9 +1,12 @@
 from abc import ABC, abstractmethod
 
-import requests
 from bs4 import BeautifulSoup
+from playwright.sync_api import (
+    sync_playwright,
+    TimeoutError as PlaywrightTimeoutError,
+)
 
-from app.scraper.schemas import (
+from app.scraper.scraper_dto import (
     ProductDTO,
     ReviewDTO,
 )
@@ -12,7 +15,16 @@ from app.scraper.schemas import (
 class BaseScraper(ABC):
     """
     Base class for all website scrapers.
+
+    Uses Playwright to fetch fully rendered HTML
+    and converts it into BeautifulSoup.
     """
+
+    HEADLESS = True
+
+    TIMEOUT = 30000
+
+    WAIT_UNTIL = "domcontentloaded"
 
     USER_AGENT = (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -20,29 +32,69 @@ class BaseScraper(ABC):
         "Chrome/137.0.0.0 Safari/537.36"
     )
 
-    def __init__(self):
-        self.headers = {
-            "User-Agent": self.USER_AGENT,
-        }
+    def get_page_html(
+        self,
+        url: str,
+    ) -> str:
+        """
+        Open a webpage using Playwright and
+        return its rendered HTML.
+        """
+
+        with sync_playwright() as p:
+
+            browser = p.chromium.launch(
+                headless=self.HEADLESS,
+            )
+
+            context = browser.new_context(
+                user_agent=self.USER_AGENT,
+                viewport={
+                    "width": 1920,
+                    "height": 1080,
+                },
+            )
+
+            page = context.new_page()
+
+            try:
+
+                page.goto(
+                    url,
+                    wait_until=self.WAIT_UNTIL,
+                    timeout=self.TIMEOUT,
+                )
+
+                page.wait_for_timeout(
+                    3000
+                )
+
+                html = page.content()
+
+            except PlaywrightTimeoutError:
+
+                html = page.content()
+
+            finally:
+
+                browser.close()
+
+        return html
 
     def fetch_page(
         self,
         url: str,
     ) -> BeautifulSoup:
         """
-        Download a webpage and return a BeautifulSoup object.
+        Download a webpage and return BeautifulSoup.
         """
 
-        response = requests.get(
-            url,
-            headers=self.headers,
-            timeout=30,
+        html = self.get_page_html(
+            url
         )
 
-        response.raise_for_status()
-
         return BeautifulSoup(
-            response.text,
+            html,
             "html.parser",
         )
 
@@ -51,9 +103,6 @@ class BaseScraper(ABC):
         self,
         product_name: str,
     ) -> list[ProductDTO]:
-        """
-        Search for products and return matching products.
-        """
         pass
 
     @abstractmethod
@@ -61,7 +110,4 @@ class BaseScraper(ABC):
         self,
         product_url: str,
     ) -> list[ReviewDTO]:
-        """
-        Scrape reviews from a product page.
-        """
         pass

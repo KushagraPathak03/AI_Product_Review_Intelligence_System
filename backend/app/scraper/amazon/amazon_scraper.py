@@ -1,14 +1,9 @@
 from urllib.parse import quote_plus
 
-from app.scraper.amazon.amazon_constants import (
-    SEARCH_URL,
-)
-
+from app.scraper.amazon.amazon_constants import SEARCH_URL
 from app.scraper.amazon.amazon_parser import AmazonParser
-
 from app.scraper.base_scraper import BaseScraper
-
-from app.scraper.schemas import (
+from app.scraper.scraper_dto import (
     ProductDTO,
     ReviewDTO,
 )
