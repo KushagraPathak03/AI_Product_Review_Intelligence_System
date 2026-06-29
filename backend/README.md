@@ -6,11 +6,13 @@ Backend API for an AI-powered platform that collects, stores, analyzes, and summ
 
 # Project Overview
 
-The backend provides APIs for:
+The backend provides APIs and services for:
 
 - Product Management
 - Review Management
 - Duplicate Review Detection
+- Amazon Product Search
+- Amazon Product Detail Scraping
 - Review Collection
 - AI Sentiment Analysis (Upcoming)
 - AI Review Summarization (Upcoming)
@@ -35,8 +37,16 @@ The backend provides APIs for:
 
 ## Web Scraping
 
+- Playwright
 - BeautifulSoup4
 - Requests
+
+## Supported Sources
+
+- Amazon (Implemented)
+- Flipkart (Planned)
+- Reddit (Planned)
+- YouTube (Planned)
 
 ## AI (Upcoming)
 
@@ -74,6 +84,31 @@ The backend provides APIs for:
 
 ---
 
+## Amazon Scraper
+
+### Product Search
+
+- Search products by keyword
+- Parse Amazon search results
+- Canonical Amazon product URLs
+- Brand detection
+- Category detection
+- Product image extraction
+
+### Product Detail
+
+- Product title
+- Brand
+- Category
+- Selling price
+- MRP
+- Discount percentage
+- Overall rating
+- Review count
+- Stock availability
+- Product description
+- Main product image
+
 ## Database
 
 - PostgreSQL Integration
@@ -94,13 +129,23 @@ backend/
 │
 ├── app/
 │   ├── common/
-│   ├── core/
+│   ├── core
 │   ├── database/
 │   ├── product/
 │   ├── review/
 │   ├── scraper/
-│   └── main.py
+│   ├── amazon/
+│   │   ├── amazon_constants.py
+│   │   ├── amazon_parser.py
+│   │   ├── amazon_scraper.py
+│   │   └── amazon_utils.py
+│   ├── base_scraper.py
+│   ├── scraper_dto.py
+│   ├── scraper_routes.py
+│   ├── scraper_schema.py
+│   └── scraper_service.py
 │
+└── main.py
 ├── requirements.txt
 ├── alembic.ini
 └── README.md
@@ -229,7 +274,11 @@ uvicorn app.main:app --reload
 | PostgreSQL Integration | ✅ Completed |
 | Alembic Migration | ✅ Completed |
 | Repository Pattern | ✅ Completed |
-| Amazon Scraper | 🚧 In Progress |
+| Playwright Integration | ✅ Completed |
+| Amazon Product Search | ✅ Completed |
+| Amazon Product Parser | ✅ Completed |
+| Amazon Product Detail Scraper | ✅ Completed |
+| Amazon Review Scraper | 🚧 In Progress |
 | AI Sentiment Analysis | ⏳ Planned |
 | Review Summarization | ⏳ Planned |
 | Fake Review Detection | ⏳ Planned |
@@ -243,19 +292,27 @@ uvicorn app.main:app --reload
 # Architecture
 
 ```
-FastAPI
-    │
-    ▼
-Routes
-    │
-    ▼
-Services
-    │
-    ▼
-Repositories
-    │
-    ▼
-PostgreSQL
+                 FastAPI
+                    │
+                    ▼
+                 API Routes
+                    │
+                    ▼
+                 Services
+                    │
+          ┌─────────┴─────────┐
+          ▼                   ▼
+    Repositories         Web Scrapers
+          │                   │
+          ▼                   ▼
+     PostgreSQL         Amazon / Flipkart
+          │
+          ▼
+     AI Processing (Upcoming)
+          │
+          ▼
+ ChromaDB + LangChain (Upcoming)
+
 ```
 
 ---
@@ -263,16 +320,18 @@ PostgreSQL
 # Future Roadmap
 
 - Amazon Review Scraper
-- Flipkart Review Scraper
+- Flipkart Product & Review Scraper
 - Reddit Review Scraper
 - YouTube Review Analyzer
+- Product Comparison Engine
 - AI Sentiment Analysis
 - AI Review Summarization
 - Fake Review Detection
 - ChromaDB Vector Database
 - LangChain RAG Chatbot
-- NiceGUI Dashboard
+- NiceGUI Analytics Dashboard
 - Docker Deployment
+- CI/CD Pipeline
 - AWS Deployment
 
 ---
