@@ -1,204 +1,585 @@
+import re
+
 from bs4 import BeautifulSoup
 
-from app.common.enums import ReviewSource
+from app.common.enums import (
+    ProductCategory,
+    ReviewSource,
+)
 
 from app.scraper.amazon.amazon_constants import BASE_URL
+
+from app.scraper.amazon.amazon_utils import (
+    build_absolute_url,
+    detect_brand,
+    detect_category,
+    normalize_text,
+)
+
 from app.scraper.scraper_dto import (
     ProductDTO,
+    ProductDetailDTO,
     ReviewDTO,
 )
 
 
 class AmazonParser:
     """
-    Parses Amazon HTML pages into ProductDTO and ReviewDTO objects.
+    Parser responsible for converting Amazon HTML pages
+    into DTO objects.
     """
+
+    # ==========================================================
+    # Search Page
+    # ==========================================================
 
     @staticmethod
     def parse_products(
         soup: BeautifulSoup,
     ) -> list[ProductDTO]:
         """
-        Parse Amazon search results into ProductDTO objects.
+        Parse Amazon search results.
         """
 
         products: list[ProductDTO] = []
 
-        product_cards = soup.select(
+        cards = soup.select(
             "div[data-component-type='s-search-result']"
         )
 
-        for card in product_cards:
+        for card in cards:
 
-            # Skip sponsored products
-            sponsored = card.select_one(
-                "span.s-sponsored-label-text"
-            )
-
-            if sponsored:
+            if AmazonParser._is_sponsored(card):
                 continue
 
-            image_element = card.select_one(
-                "img.s-image"
-            )
+            title = AmazonParser._extract_title(card)
 
-            title_anchor = None
+            url = AmazonParser._extract_product_url(card)
 
-            #
-            # Amazon changes its HTML frequently.
-            # Try multiple selectors in order.
-            #
-            selectors = [
-                "a.a-link-normal.s-line-clamp-2",
-                "a.a-link-normal.s-no-outline",
-                "div[data-cy='title-recipe'] a",
-                "h2 + a",
-            ]
+            image = AmazonParser._extract_image(card)
 
-            for selector in selectors:
-                title_anchor = card.select_one(
-                    selector
+            if not title or not url:
+                continue
+
+            products.append(
+                ProductDTO(
+                    product_name=title,
+                    brand=AmazonParser._extract_brand(
+                        title
+                    ),
+                    category=AmazonParser._extract_category(
+                        title
+                    ),
+                    product_url=url,
+                    image_url=image,
                 )
-
-                if (
-                    title_anchor
-                    and title_anchor.get_text(strip=True)
-                ):
-                    break
-
-            #
-            # Fallback
-            #
-            if title_anchor is None:
-
-                for anchor in card.select("a[href]"):
-
-                    text = anchor.get_text(
-                        strip=True
-                    )
-
-                    if len(text) > 20:
-                        title_anchor = anchor
-                        break
-
-            if title_anchor is None:
-                continue
-
-            product_name = title_anchor.get_text(
-                strip=True
             )
-
-            product_url = title_anchor.get(
-                "href"
-            )
-
-            if not product_url:
-                continue
-
-            if not product_url.startswith(
-                "http"
-            ):
-                product_url = (
-                    BASE_URL + product_url
-                )
-
-            product = ProductDTO(
-                product_name=product_name,
-                brand=None,
-                category=None,
-                product_url=product_url,
-                image_url=(
-                    image_element["src"]
-                    if image_element
-                    else None
-                ),
-            )
-
-            products.append(product)
 
         return products
 
+    # ==========================================================
+    # Product Detail Page
+    # ==========================================================
+
     @staticmethod
-    def parse_reviews(
+    def parse_product_details(
         soup: BeautifulSoup,
-    ) -> list[ReviewDTO]:
+        product_url: str,
+    ) -> ProductDetailDTO:
         """
-        Parse an Amazon review page into ReviewDTO objects.
+        Parse a product detail page.
         """
 
-        reviews: list[ReviewDTO] = []
-
-        review_cards = soup.select(
-            "div[data-hook='review']"
+        product_name = (
+            AmazonParser._extract_product_title(
+                soup
+            )
         )
 
-        for card in review_cards:
+        brand = (
+            AmazonParser._extract_brand(
+                product_name
+            )
+            if product_name
+            else None
+        )
 
-            reviewer = card.select_one(
-                "span.a-profile-name"
+        category = (
+            AmazonParser._extract_category(
+                product_name
+            )
+            if product_name
+            else None
+        )
+
+        price = AmazonParser._extract_price(
+            soup
+        )
+
+        mrp = AmazonParser._extract_mrp(
+            soup
+        )
+
+        discount = (
+            AmazonParser._extract_discount(
+                soup
+            )
+        )
+
+        rating = (
+            AmazonParser._extract_rating(
+                soup
+            )
+        )
+
+        review_count = (
+            AmazonParser._extract_review_count(
+                soup
+            )
+        )
+
+        availability = (
+            AmazonParser._extract_availability(
+                soup
+            )
+        )
+
+        description = (
+            AmazonParser._extract_description(
+                soup
+            )
+        )
+
+        image = (
+            AmazonParser._extract_main_image(
+                soup
+            )
+        )
+
+        return ProductDetailDTO(
+            product_name=product_name or "",
+
+            brand=brand,
+
+            category=category,
+
+            price=price,
+
+            mrp=mrp,
+
+            discount_percentage=discount,
+
+            rating=rating,
+
+            review_count=review_count,
+
+            availability=availability,
+
+            description=description,
+
+            image_url=image,
+
+            product_url=product_url,
+        )
+    
+        # ==========================================================
+    # Search Page Helper Methods
+    # ==========================================================
+
+    @staticmethod
+    def _is_sponsored(
+        card: BeautifulSoup,
+    ) -> bool:
+        """
+        Check if the search result is sponsored.
+        """
+
+        text = card.get_text(
+            " ",
+            strip=True,
+        ).lower()
+
+        return "sponsored" in text
+
+    @staticmethod
+    def _extract_title(
+        card: BeautifulSoup,
+    ) -> str | None:
+        """
+        Extract product title from search result.
+        """
+
+        anchors = card.select("a[href]")
+
+        for anchor in anchors:
+
+            text = normalize_text(
+                anchor.get_text(
+                    strip=True
+                )
             )
 
-            rating = card.select_one(
-                "i[data-hook='review-star-rating'] span"
-            )
+            if len(text) > 25:
+                return text
 
-            title = card.select_one(
-                "a[data-hook='review-title'] span"
-            )
+        return None
 
-            review_text = card.select_one(
-                "span[data-hook='review-body']"
-            )
+    @staticmethod
+    def _extract_product_url(
+        card: BeautifulSoup,
+    ) -> str | None:
+        """
+        Extract canonical Amazon product URL.
+        """
 
-            review_date = card.select_one(
-                "span[data-hook='review-date']"
-            )
+        anchors = card.select("a[href]")
 
-            if review_text is None:
+        for anchor in anchors:
+
+            href = anchor.get("href")
+
+            if not href:
                 continue
 
-            rating_value = None
+            if "/dp/" in href:
 
-            if rating:
-                try:
-                    rating_value = float(
-                        rating.get_text(
-                            strip=True
-                        ).split()[0]
-                    )
-                except ValueError:
-                    rating_value = None
+                return build_absolute_url(
+                    href,
+                    BASE_URL,
+                )
 
-            review = ReviewDTO(
-                source=ReviewSource.AMAZON,
-                reviewer_name=(
-                    reviewer.get_text(
-                        strip=True
-                    )
-                    if reviewer
-                    else None
-                ),
-                rating=rating_value,
-                review_title=(
-                    title.get_text(
-                        strip=True
-                    )
-                    if title
-                    else None
-                ),
-                review_text=review_text.get_text(
-                    strip=True
-                ),
-                review_date=(
-                    review_date.get_text(
-                        strip=True
-                    )
-                    if review_date
-                    else None
-                ),
-                review_url=None,
+        return None
+
+    @staticmethod
+    def _extract_image(
+        card: BeautifulSoup,
+    ) -> str | None:
+        """
+        Extract product image from search page.
+        """
+
+        image = card.select_one(
+            "img.s-image"
+        )
+
+        if image:
+            return image.get("src")
+
+        return None
+
+    @staticmethod
+    def _extract_brand(
+        product_name: str,
+    ) -> str | None:
+        """
+        Detect brand from title.
+        """
+
+        return detect_brand(
+            product_name
+        )
+
+    @staticmethod
+    def _extract_category(
+        product_name: str,
+    ) -> ProductCategory | None:
+        """
+        Detect category from title.
+        """
+
+        return detect_category(
+            product_name
+        )
+
+    # ==========================================================
+    # Product Detail Helper Methods
+    # ==========================================================
+
+    @staticmethod
+    def _extract_product_title(
+        soup: BeautifulSoup,
+    ) -> str | None:
+        """
+        Extract product title.
+        """
+
+        selectors = [
+            "#productTitle",
+            "span#productTitle",
+            "h1 span",
+        ]
+
+        for selector in selectors:
+
+            title = soup.select_one(
+                selector
             )
 
-            reviews.append(review)
+            if title:
 
-        return reviews
+                return normalize_text(
+                    title.get_text()
+                )
+
+        return None
+
+    @staticmethod
+    def _extract_main_image(
+        soup: BeautifulSoup,
+    ) -> str | None:
+        """
+        Extract main product image.
+        """
+
+        image = soup.select_one(
+            "#landingImage"
+        )
+
+        if image:
+
+            return (
+                image.get("data-old-hires")
+                or image.get("src")
+            )
+
+        return None
+
+    @staticmethod
+    def _extract_price(
+        soup: BeautifulSoup,
+    ) -> float | None:
+        """
+        Extract selling price.
+        """
+
+        selectors = [
+            ".apexPriceToPay .a-offscreen",
+            ".a-price.aok-align-center .a-offscreen",
+            ".a-price .a-offscreen",
+        ]
+
+        for selector in selectors:
+
+            element = soup.select_one(
+                selector
+            )
+
+            if not element:
+                continue
+
+            text = (
+                element.get_text()
+                .replace("₹", "")
+                .replace(",", "")
+                .strip()
+            )
+
+            try:
+                return float(text)
+
+            except ValueError:
+                continue
+
+        return None
+
+    @staticmethod
+    def _extract_mrp(
+        soup: BeautifulSoup,
+    ) -> float | None:
+        """
+        Extract MRP.
+        """
+
+        selectors = [
+            ".a-text-price .a-offscreen",
+            "span[data-a-strike='true'] .a-offscreen",
+        ]
+
+        for selector in selectors:
+
+            element = soup.select_one(
+                selector
+            )
+
+            if not element:
+                continue
+
+            text = (
+                element.get_text()
+                .replace("₹", "")
+                .replace(",", "")
+                .strip()
+            )
+
+            try:
+                return float(text)
+
+            except ValueError:
+                continue
+
+        return None
+
+    @staticmethod
+    def _extract_discount(
+        soup: BeautifulSoup,
+    ) -> float | None:
+        """
+        Extract discount percentage.
+        """
+
+        element = soup.select_one(
+            ".savingsPercentage"
+        )
+
+        if not element:
+            return None
+
+        text = (
+            element.get_text()
+            .replace("-", "")
+            .replace("%", "")
+            .strip()
+        )
+
+        try:
+            return float(text)
+
+        except ValueError:
+            return None
+        
+    @staticmethod
+    def _extract_rating(
+        soup: BeautifulSoup,
+    ) -> float | None:
+        """
+        Extract overall product rating.
+        """
+
+        selectors = [
+            "span[data-hook='rating-out-of-text']",
+            "#acrPopover span.a-size-base",
+            "i.a-icon-star span.a-icon-alt",
+        ]
+
+        for selector in selectors:
+
+            element = soup.select_one(selector)
+
+            if not element:
+                continue
+
+            text = normalize_text(
+                 element.get_text()
+            )
+
+            try:
+                return float(
+                        text.split()[0]
+                )
+
+            except (ValueError, IndexError):
+                continue
+
+        return None
+
+    @staticmethod
+    def _extract_review_count(
+        soup: BeautifulSoup,
+    ) -> int | None:
+        """
+        Extract number of ratings/reviews.
+        """
+
+        selectors = [
+            "#acrCustomerReviewText",
+            "span[data-hook='total-review-count']",
+        ]
+
+        for selector in selectors:
+
+            element = soup.select_one(selector)
+
+            if not element:
+                continue
+
+            text = (
+                element.get_text()
+                .replace(",", "")
+            )
+
+            match = re.search(
+                r"\d+",
+                text,
+            )
+
+            if match:
+                return int(match.group())
+
+        return None
+
+    @staticmethod
+    def _extract_availability(
+        soup: BeautifulSoup,
+    ) -> str | None:
+        """
+        Extract stock availability.
+        """
+
+        selectors = [
+            "#availability span",
+            "#availability",
+        ]
+
+        for selector in selectors:
+
+            element = soup.select_one(selector)
+
+            if element:
+
+                text = normalize_text(
+                    element.get_text()
+                )
+
+                if text:
+                    return text
+
+        return None
+
+    @staticmethod
+    def _extract_description(
+        soup: BeautifulSoup,
+    ) -> str | None:
+        """
+        Extract product description / feature bullets.
+        """
+
+        bullets = soup.select(
+            "#feature-bullets li span.a-list-item"
+        )
+
+        if bullets:
+
+            description = []
+
+            for bullet in bullets:
+
+                text = normalize_text(
+                    bullet.get_text()
+                )
+
+                if text:
+                    description.append(text)
+
+            return "\n".join(description)
+
+        description = soup.select_one(
+            "#productDescription"
+        )
+
+        if description:
+
+            return normalize_text(
+                description.get_text()
+            )
+
+        return None
