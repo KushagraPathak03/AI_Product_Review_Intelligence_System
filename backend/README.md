@@ -109,6 +109,12 @@ The backend provides APIs and services for:
 - Product description
 - Main product image
 
+### Current Status
+
+- Amazon Search Scraper ✅
+- Product Detail Scraper ✅
+- Review Scraper 🚧 In Progress
+
 ## Database
 
 - PostgreSQL Integration
