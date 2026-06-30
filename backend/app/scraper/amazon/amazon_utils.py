@@ -199,3 +199,27 @@ def build_absolute_url(
         return f"{base_url}/dp/{asin}"
 
     return url
+
+def extract_asin(
+    product_url: str,
+) -> str | None:
+    """
+    Extract Amazon ASIN from a product URL.
+
+    Example:
+    https://www.amazon.in/dp/B0FMYC2ZPS
+
+    returns
+
+    B0FMYC2ZPS
+    """
+
+    match = re.search(
+        r"/dp/([A-Z0-9]{10})",
+        product_url,
+    )
+
+    if match:
+        return match.group(1)
+
+    return None

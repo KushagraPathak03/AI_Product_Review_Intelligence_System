@@ -98,6 +98,90 @@ class BaseScraper(ABC):
             "html.parser",
         )
 
+    def fetch_reviews_page(
+        self,
+        product_url: str,
+    ) -> BeautifulSoup:
+        """
+        Open the product page and click the
+        'See all reviews' link using Playwright.
+        """
+
+        with sync_playwright() as p:
+
+            browser = p.chromium.launch(
+                headless=self.HEADLESS,
+            )
+
+            context = browser.new_context(
+                user_agent=self.USER_AGENT,
+                viewport={
+                    "width": 1920,
+                    "height": 1080,
+                },
+            )
+
+            page = context.new_page()
+
+            try:
+
+                page.goto(
+                    product_url,
+                    wait_until=self.WAIT_UNTIL,
+                    timeout=self.TIMEOUT,
+                )
+
+                page.wait_for_timeout(
+                    3000
+                )
+
+                selectors = [
+                    "#acrCustomerReviewLink",
+                    "a[data-hook='see-all-reviews-link-foot']",
+                    "a[href*='product-reviews']",
+                ]
+
+                clicked = False
+
+                for selector in selectors:
+
+                    try:
+
+                        locator = page.locator(selector)
+
+                        if locator.count() > 0:
+
+                            locator.first.click()
+
+                            clicked = True
+
+                            break
+
+                    except Exception:
+
+                        continue
+
+                if clicked:
+
+                    page.wait_for_timeout(
+                        5000
+                    )
+
+                html = page.content()
+
+            except PlaywrightTimeoutError:
+
+                html = page.content()
+
+            finally:
+
+                browser.close()
+
+        return BeautifulSoup(
+            html,
+            "html.parser",
+        )
+
     @abstractmethod
     def search_product(
         self,

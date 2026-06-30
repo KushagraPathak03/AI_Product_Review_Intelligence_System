@@ -66,11 +66,16 @@ class AmazonScraper(BaseScraper):
         product_url: str,
     ) -> list[ReviewDTO]:
         """
-        Scrape reviews from a product page.
+        Scrape customer reviews by navigating
+        from the product page.
         """
 
-        soup = self.fetch_page(
+        soup = self.fetch_reviews_page(
             product_url
+        )
+
+        review_cards = soup.select(
+            "div[data-hook='review']"
         )
 
         return AmazonParser.parse_reviews(

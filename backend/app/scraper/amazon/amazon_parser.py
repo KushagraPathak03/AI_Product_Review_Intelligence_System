@@ -583,3 +583,118 @@ class AmazonParser:
             )
 
         return None
+    
+    # ==========================================================
+    # Review Parser
+    # ==========================================================
+
+    @staticmethod
+    def parse_reviews(
+        soup: BeautifulSoup,
+    ) -> list[ReviewDTO]:
+        """
+        Parse Amazon review cards from both the
+        product page preview and review pages.
+        """
+
+        reviews: list[ReviewDTO] = []
+
+        review_cards = soup.select(
+            "div[data-hook='review']"
+        )
+
+        for card in review_cards:
+
+            reviewer = card.select_one(
+                ".a-profile-name"
+            )
+
+            rating = card.select_one(
+                "i[data-hook='review-star-rating'] .a-icon-alt"
+            )
+
+            title = (
+                card.select_one(
+                    "h5[data-hook='reviewTitle']"
+                )
+                or
+                card.select_one(
+                    "span[data-hook='review-title']"
+                )
+            )
+
+            review_text = (
+                card.select_one(
+                    "div[data-hook='reviewRichContentContainer']"
+                )
+                or
+                card.select_one(
+                    "span[data-hook='review-body']"
+                )
+            )
+
+            review_date = card.select_one(
+                "span[data-hook='review-date']"
+            )
+
+            if review_text is None:
+                continue
+
+            rating_value = None
+
+            if rating:
+
+                try:
+
+                    rating_value = float(
+                        rating.get_text(
+                            strip=True
+                        ).split()[0]
+                    )
+
+                except Exception:
+
+                    pass
+
+            reviews.append(
+
+                ReviewDTO(
+
+                    source=ReviewSource.AMAZON,
+
+                    reviewer_name=(
+                        normalize_text(
+                            reviewer.get_text()
+                        )
+                        if reviewer
+                        else None
+                    ),
+
+                    rating=rating_value,
+
+                    review_title=(
+                        normalize_text(
+                            title.get_text()
+                        )
+                        if title
+                        else None
+                    ),
+
+                    review_text=normalize_text(
+                        review_text.get_text()
+                    ),
+
+                    review_date=(
+                        normalize_text(
+                            review_date.get_text()
+                        )
+                        if review_date
+                        else None
+                    ),
+
+                    review_url=None,
+                )
+
+            )
+
+        return reviews
