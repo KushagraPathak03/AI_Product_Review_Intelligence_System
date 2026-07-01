@@ -8,8 +8,15 @@ from app.product.product_model import Product
 from app.review.review_model import Review
 
 # Import routers
-from app.product.product_routes import router as product_router
-from app.review.review_routes import router as review_router
+from app.product.product_routes import (
+    router as product_router,
+)
+from app.review.review_routes import (
+    router as review_router,
+)
+from app.scraper.scraper_routes import (
+    router as scraper_router,
+)
 
 
 app = FastAPI(
@@ -22,24 +29,51 @@ app = FastAPI(
 )
 
 # Register API routes
-app.include_router(product_router)
-app.include_router(review_router)
+app.include_router(
+    product_router,
+)
+
+app.include_router(
+    review_router,
+)
+
+app.include_router(
+    scraper_router,
+)
 
 
-@app.get("/", tags=["Health"])
+@app.get(
+    "/",
+    tags=["Health"],
+)
 def home():
+    """
+    Health check endpoint.
+    """
+
     return {
         "message": "AI Product Review Intelligence API Running",
         "version": "1.0.0",
     }
 
 
-@app.get("/db-test", tags=["Health"])
+@app.get(
+    "/db-test",
+    tags=["Health"],
+)
 def db_test():
+    """
+    Test PostgreSQL connection.
+    """
+
     try:
+
         with engine.connect() as conn:
+
             version = conn.execute(
-                text("SELECT version();")
+                text(
+                    "SELECT version();"
+                )
             ).scalar()
 
         return {
@@ -49,6 +83,7 @@ def db_test():
         }
 
     except Exception as e:
+
         return {
             "status": "failed",
             "error": str(e),

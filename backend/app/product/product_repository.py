@@ -32,6 +32,15 @@ class ProductRepository(BaseRepository[Product]):
             model_number=product.model_number,
             launch_year=product.launch_year,
             image_url=product.image_url,
+
+            price=product.price,
+            mrp=product.mrp,
+            discount_percentage=product.discount_percentage,
+            rating=product.rating,
+            review_count=product.review_count,
+            availability=product.availability,
+            description=product.description,
+            product_url=product.product_url,
         )
 
         return self.create(
@@ -54,6 +63,29 @@ class ProductRepository(BaseRepository[Product]):
         db_product.model_number = product.model_number
         db_product.launch_year = product.launch_year
         db_product.image_url = product.image_url
+        db_product.price = product.price
+        db_product.mrp = product.mrp
+        
+        db_product.discount_percentage = (
+            product.discount_percentage
+        )
+
+        db_product.rating = product.rating
+        db_product.review_count = (
+            product.review_count
+        )
+        
+        db_product.availability = (
+            product.availability
+        )
+        
+        db_product.description = (
+            product.description
+        )
+        
+        db_product.product_url = (
+            product.product_url
+        )
 
         return self.update(
             db=db,

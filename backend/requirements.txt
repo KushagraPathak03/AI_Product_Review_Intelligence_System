@@ -1,18 +1,38 @@
+# ==========================
+# FastAPI
+# ==========================
 fastapi
 uvicorn[standard]
 
+# ==========================
+# Database
+# ==========================
 sqlalchemy
 psycopg2-binary
 alembic
 
+# ==========================
+# Validation & Settings
+# ==========================
 pydantic
 pydantic-settings
-
 python-dotenv
 
+# ==========================
+# Web Scraping
+# ==========================
+playwright
+beautifulsoup4
+requests
+rapidfuzz
+
+# ==========================
+# AI / Machine Learning
+# ==========================
 transformers
 torch
 
-playwright
-
+# ==========================
+# Logging
+# ==========================
 loguru

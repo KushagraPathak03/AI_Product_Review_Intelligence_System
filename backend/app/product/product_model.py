@@ -1,9 +1,19 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, Integer, String
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    Float,
+    Integer,
+    String,
+    Text,
+)
+from sqlalchemy.orm import (
+    Mapped,
+    mapped_column,
+    relationship,
+)
 from sqlalchemy.sql import func
-from sqlalchemy import Boolean
 
 from app.database.base import Base
 
@@ -60,28 +70,69 @@ class Product(Base):
         nullable=True,
     )
 
+    price: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+    )
+
+    mrp: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+    )
+
+    discount_percentage: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+    )
+
+    rating: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+    )
+
+    review_count: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
+    availability: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    description: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    product_url: Mapped[str | None] = mapped_column(
+        String(500),
+        unique=True,
+        nullable=True,
+    )
+
     is_deleted: Mapped[bool] = mapped_column(
-    Boolean,
-    default=False,
-    nullable=False,
+        Boolean,
+        default=False,
+        nullable=False,
     )
 
     deleted_at: Mapped[datetime | None] = mapped_column(
-    DateTime(timezone=True),
-    nullable=True,
+        DateTime(timezone=True),
+        nullable=True,
     )
 
     created_at: Mapped[datetime] = mapped_column(
-    DateTime(timezone=True),
-    server_default=func.now(),
-    nullable=False,
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
     )
 
     updated_at: Mapped[datetime] = mapped_column(
-    DateTime(timezone=True),
-    server_default=func.now(),
-    onupdate=func.now(),
-    nullable=False,
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
     )
 
     reviews: Mapped[list["Review"]] = relationship(
