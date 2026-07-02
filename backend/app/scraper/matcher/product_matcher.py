@@ -1,10 +1,16 @@
 from rapidfuzz import fuzz
 
+from app.core.logger import get_logger
+
 from app.scraper.matcher.product_parser import (
     ParsedProduct,
     parse_product_name,
 )
+
 from app.scraper.scraper_dto import ProductDTO
+
+
+logger = get_logger(__name__)
 
 
 MINIMUM_MATCH_SCORE = 65
@@ -103,12 +109,16 @@ def calculate_match_score(
     # Model
     # -------------------------------------------------
 
-    if query.model and candidate.model:
+    if (
+        query.model
+        and candidate.model
+    ):
 
         if _equals(
             query.model,
             candidate.model,
         ):
+
             score += 35
 
         else:
@@ -119,12 +129,16 @@ def calculate_match_score(
     # Variant
     # -------------------------------------------------
 
-    if query.variant and candidate.variant:
+    if (
+        query.variant
+        and candidate.variant
+    ):
 
         if _equals(
             query.variant,
             candidate.variant,
         ):
+
             score += 10
 
         else:
@@ -135,19 +149,22 @@ def calculate_match_score(
     # Storage
     # -------------------------------------------------
 
-    if query.storage and candidate.storage:
+    if (
+        query.storage
+        and candidate.storage
+    ):
 
         if _equals(
             query.storage,
             candidate.storage,
         ):
+
             score += 5
 
     return round(
         score,
         2,
     )
-
 
 def find_best_product_match(
     query: str,
@@ -160,6 +177,10 @@ def find_best_product_match(
 
     if not products:
 
+        logger.warning(
+            "No products available for matching."
+        )
+
         return None
 
     parsed_query = parse_product_name(
@@ -170,17 +191,16 @@ def find_best_product_match(
 
     best_score = float("-inf")
 
-    best_fuzzy = 0
+    best_fuzzy = 0.0
 
-    print()
-    print("=" * 100)
-    print("SMART PRODUCT MATCHER")
-    print("=" * 100)
+    logger.info(
+        "Starting smart product matching."
+    )
 
-    print("Query")
-    print(parsed_query)
-
-    print("-" * 100)
+    logger.debug(
+        "Parsed Query: %s",
+        parsed_query,
+    )
 
     for product in products:
 
@@ -198,13 +218,23 @@ def find_best_product_match(
             parsed_candidate,
         )
 
-        print(f"Candidate : {product.product_name}")
-        print(f"Parsed    : {parsed_candidate}")
-        print(f"Fuzzy     : {fuzzy_score:.2f}")
-        print(f"Score     : {final_score:.2f}")
-        print("-" * 100)
+        logger.debug(
+            (
+                "Candidate='%s' | "
+                "Parsed=%s | "
+                "Fuzzy=%.2f | "
+                "Score=%.2f"
+            ),
+            product.product_name,
+            parsed_candidate,
+            fuzzy_score,
+            final_score,
+        )
 
-        # Better tie-breaking.
+        # -------------------------------------------------
+        # Better tie-breaking
+        # -------------------------------------------------
+
         if (
             final_score > best_score
             or (
@@ -219,37 +249,48 @@ def find_best_product_match(
 
             best_product = product
 
+    # -------------------------------------------------
+    # No Match
+    # -------------------------------------------------
+
     if best_product is None:
 
-        print("No products available.")
+        logger.warning(
+            "No products available after matching."
+        )
 
         return None
 
     if best_score < MINIMUM_MATCH_SCORE:
 
-        print()
-
-        print(
-            f"No suitable product found "
-            f"(Best Score = {best_score:.2f})"
+        logger.warning(
+            (
+                "No suitable product found. "
+                "Best Score = %.2f "
+                "(Minimum Required = %d)"
+            ),
+            best_score,
+            MINIMUM_MATCH_SCORE,
         )
-
-        print("=" * 100)
 
         return None
 
-    print()
+    # -------------------------------------------------
+    # Selected Product
+    # -------------------------------------------------
 
-    print("SELECTED PRODUCT")
+    logger.info(
+        "Selected Product: %s",
+        best_product.product_name,
+    )
 
-    print(best_product.product_name)
-
-    print()
-
-    print(f"Final Score : {best_score:.2f}")
-
-    print(f"Fuzzy Score : {best_fuzzy:.2f}")
-
-    print("=" * 100)
+    logger.info(
+        (
+            "Final Match Score = %.2f | "
+            "Fuzzy Score = %.2f"
+        ),
+        best_score,
+        best_fuzzy,
+    )
 
     return best_product

@@ -1,5 +1,7 @@
 from sqlalchemy.orm import Session
 
+from app.core.logger import get_logger
+
 from app.product.product_schema import (
     ProductCreate,
     ProductUpdate,
@@ -39,6 +41,10 @@ from app.scraper.matcher.category_detector import (
     detect_category,
 )
 
+
+logger = get_logger(__name__)
+
+
 class ScraperService:
     """
     Coordinates Amazon scraping and database persistence.
@@ -67,6 +73,11 @@ class ScraperService:
         9. Save reviews.
         """
 
+        logger.info(
+            "Starting Amazon scraping for '%s'.",
+            product_name,
+        )
+
         # --------------------------------------------------
         # Validate Product Query
         # --------------------------------------------------
@@ -77,14 +88,27 @@ class ScraperService:
 
         if not is_valid:
 
+            logger.warning(
+                "Validation failed: %s",
+                error,
+            )
+
             return {
                 "success": False,
                 "message": error,
             }
 
+        logger.info(
+            "Product query validated successfully."
+        )
+
         # --------------------------------------------------
         # Search Amazon
         # --------------------------------------------------
+
+        logger.info(
+            "Searching Amazon..."
+        )
 
         products = (
             ScraperService.amazon_scraper.search_product(
@@ -94,10 +118,19 @@ class ScraperService:
 
         if not products:
 
+            logger.warning(
+                "No products found on Amazon."
+            )
+
             return {
                 "success": False,
                 "message": "No products found on Amazon.",
             }
+
+        logger.info(
+            "Amazon returned %d products.",
+            len(products),
+        )
 
         # --------------------------------------------------
         # Remove Accessories
@@ -107,7 +140,16 @@ class ScraperService:
             products=products,
         )
 
+        logger.info(
+            "%d products remained after filtering.",
+            len(products),
+        )
+
         if not products:
+
+            logger.warning(
+                "Only accessory listings were found."
+            )
 
             return {
                 "success": False,
@@ -121,27 +163,32 @@ class ScraperService:
         # Smart Product Matching
         # --------------------------------------------------
 
-        print("\n===== AMAZON SEARCH RESULTS =====")
-
-        for p in products:
-            print(p.product_name)
-
-        print("===============================\n")
+        logger.info(
+            "Finding best product match..."
+        )
 
         product = find_best_product_match(
             query=product_name,
             products=products,
         )
 
-        print("Selected Product:")
-        print(product.product_name if product else "None")
-
         if product is None:
+
+            logger.warning(
+                "No suitable product match found."
+            )
 
             return {
                 "success": False,
-                "message": "Requested product was not found on Amazon.",
+                "message": (
+                    "Requested product was not found on Amazon."
+                ),
             }
+
+        logger.info(
+            "Selected product: %s",
+            product.product_name,
+        )
 
         # --------------------------------------------------
         # Strict Product Validation
@@ -152,6 +199,10 @@ class ScraperService:
             product.product_name,
         ):
 
+            logger.warning(
+                "Strict product validation failed."
+            )
+
             return {
                 "success": False,
                 "message": (
@@ -159,14 +210,39 @@ class ScraperService:
                 ),
             }
 
+        logger.info(
+            "Strict product validation passed."
+        )
+
         # --------------------------------------------------
         # Scrape Product Details
         # --------------------------------------------------
+
+        logger.info(
+            "Scraping product details..."
+        )
 
         details = (
             ScraperService.amazon_scraper.scrape_product_details(
                 product.product_url
             )
+        )
+
+        if details is None:
+
+            logger.error(
+                "Failed to scrape product details."
+            )
+
+            return {
+                "success": False,
+                "message": (
+                    "Unable to scrape product details."
+                ),
+            }
+
+        logger.info(
+            "Product details scraped successfully."
         )
 
         # --------------------------------------------------
@@ -179,6 +255,11 @@ class ScraperService:
             else detect_category(
                 details.product_name
             )
+        )
+
+        logger.info(
+            "Detected category: %s",
+            category,
         )
 
         # --------------------------------------------------
@@ -206,6 +287,11 @@ class ScraperService:
         # Save or Update Product
         # --------------------------------------------------
 
+        logger.info(
+            "Saving product '%s' to database...",
+            details.product_name,
+        )
+
         try:
 
             db_product = ProductService.create_product(
@@ -213,33 +299,69 @@ class ScraperService:
                 product=product_create,
             )
 
+            logger.info(
+                "Created new product (ID=%s).",
+                db_product.id,
+            )
+
         except Exception:
 
-            existing_products = ProductService.get_products(
-                db=db,
-                keyword=details.product_name,
-                page=1,
-                page_size=1,
+            logger.info(
+                "Product already exists. Updating..."
             )
 
-            if not existing_products:
+            try:
+
+                existing_products = (
+                    ProductService.get_products(
+                        db=db,
+                        keyword=details.product_name,
+                        page=1,
+                        page_size=1,
+                    )
+                )
+
+                if not existing_products:
+
+                    raise Exception(
+                        "Existing product not found."
+                    )
+
+                db_product = existing_products[0]
+
+                product_update = ProductUpdate(
+                    **product_create.model_dump()
+                )
+
+                db_product = (
+                    ProductService.update_product(
+                        db=db,
+                        product_id=db_product.id,
+                        product=product_update,
+                    )
+                )
+
+                logger.info(
+                    "Updated product (ID=%s).",
+                    db_product.id,
+                )
+
+            except Exception:
+
+                logger.exception(
+                    "Failed to save or update product '%s'.",
+                    details.product_name,
+                )
+
                 raise
-
-            db_product = existing_products[0]
-
-            product_update = ProductUpdate(
-                **product_create.model_dump()
-            )
-
-            db_product = ProductService.update_product(
-                db=db,
-                product_id=db_product.id,
-                product=product_update,
-            )
 
         # --------------------------------------------------
         # Scrape Reviews
         # --------------------------------------------------
+
+        logger.info(
+            "Scraping customer reviews..."
+        )
 
         reviews = (
             ScraperService.amazon_scraper.scrape_reviews(
@@ -249,10 +371,15 @@ class ScraperService:
 
         if not reviews:
 
+            logger.warning(
+                "No customer reviews found."
+            )
+
             return {
                 "success": True,
                 "message": (
-                    "Product found successfully, but no reviews are available."
+                    "Product found successfully, "
+                    "but no reviews are available."
                 ),
                 "category": category,
                 "product_id": db_product.id,
@@ -261,6 +388,11 @@ class ScraperService:
                 "reviews_saved": 0,
                 "reviews_skipped": 0,
             }
+
+        logger.info(
+            "%d reviews scraped.",
+            len(reviews),
+        )
 
         # --------------------------------------------------
         # Save Reviews
@@ -295,9 +427,25 @@ class ScraperService:
 
                 skipped_reviews += 1
 
+                logger.exception(
+                    "Failed to save review from '%s'.",
+                    review.reviewer_name,
+                )
+
+        logger.info(
+            "Saved Reviews: %d | Skipped Reviews: %d",
+            saved_reviews,
+            skipped_reviews,
+        )
+
         # --------------------------------------------------
         # Final Response
         # --------------------------------------------------
+
+        logger.info(
+            "Scraping finished successfully for '%s'.",
+            db_product.product_name,
+        )
 
         return {
             "success": True,
