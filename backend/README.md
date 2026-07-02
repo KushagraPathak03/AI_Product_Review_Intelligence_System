@@ -1,6 +1,8 @@
-# AI Product Review Intelligence System - Backend
+# AI Product Review Intelligence System
 
-Backend API for an AI-powered platform that collects, stores, analyzes, and summarizes electronic product reviews from multiple online sources.
+An AI-powered platform for collecting, analyzing, and summarizing electronic product reviews from multiple online sources using web scraping, natural language processing, and large language models.
+
+**Backend Service** built with FastAPI, PostgreSQL, SQLAlchemy, Playwright, and AI-powered review intelligence.
 
 ---
 
